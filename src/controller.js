@@ -1,17 +1,51 @@
 import pg from "pg";
 import { pool } from "./db.js";
-
+import { Log } from "./contract.js";
 export const home = async (req, res) => {
   try {
-    const query = "SELECT part, title, text FROM complaints";
-    const result = await pool.query(query);
 
-    res.json(result.rows);
+    // const query = `SELECT part, title, text FROM complaints`;
+    const query_popular = `SELECT complaints.*, users.username, users.profile FROM complaints LEFT JOIN users ON complaints.user_id = users.user_id ORDER BY views DESC LIMIT 2`;
+    const query_recent = `SELECT complaints.*, users.username, users.profile FROM complaints LEFT JOIN users ON complaints.user_id = users.user_id ORDER BY released_time DESC LIMIT 2`;
+      
+    const result_popular = await pool.query(query_popular);
+    console.log("Popular complaints uploaded ✅");
+    const result_recent = await pool.query(query_recent);
+    console.log("Recent complaints uploaded ✅");
+    res.json({popular: result_popular.rows,recent: result_recent.rows});
+
   } catch (err) {
     console.log(err);
-    res.status(500).send("Error retrieving complaints");
+    res.status(500).json(err);
   }
 };
+export const popular = async (req, res) => {
+  try {
+      const { size, page } = req.query;
+      // const query = `SELECT part, title, text FROM complaints`;
+      const query = `SELECT complaints.*, users.username, users.profile FROM complaints LEFT JOIN users ON complaints.user_id = users.user_id ORDER BY views LIMIT ${size} OFFSET ${(page - 1) * size}`;
+      
+      const {rows} = await pool.query(query);
+      console.log("All complaints uploaded ✅");
+      res.json(rows);
+    } catch (err) {
+      console.log(err);
+      res.status(500).json(err);
+    }
+}
+export const recent = async (req, res) => {
+  try {
+    const { size, page } = req.query;
+    // const query = `SELECT part, title, text FROM complaints`;
+    const query =`SELECT complaints.*, users.username, users.profile FROM complaints LEFT JOIN users ON complaints.user_id = users.user_id ORDER BY released_time DESC LIMIT ${size} OFFSET ${(page - 1) * size}`;
+    const {rows} = await pool.query(query);
+    console.log("All complaints uploaded ✅");
+    res.json(rows);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json(err);
+  }
+}
 
 export const getAdd = (req, res) => {
   return res.send("예쁜 페이지");
@@ -19,12 +53,9 @@ export const getAdd = (req, res) => {
 
 export const postAdd = async (req, res) => {
   try {
-    // const { title, text, part }  = req.body; // part 고민
+    const { title, text, part } = req.body; // part 고민
+    const {user_id} = req.query;
     // const {user_id} = req.session; // 나중에
-    const title = "공사장 직원분들이 너무 난폭해요";
-    const text = "아 진짜 너무 화나네요, 이러다 진짜 화병 날 것 같아요";
-    const part = "대인문제";
-    const user_id = "2";
     const newComplaint = {
       part,
       status: "접수",
@@ -34,7 +65,7 @@ export const postAdd = async (req, res) => {
       user_id,
     };
 
-    const query = `INSERT INTO complaints (part, status, title, text, released_time, user_id) VALUES ($1, $2, $3, $4, $5, $6)`;
+    const query = `INSERT INTO complaints (part, status, title, text, released_time, user_id) VALUES ($1, $2, $3, $4, $5, $6) returning complaint_id, released_time`;
     const values = [
       newComplaint.part,
       newComplaint.status,
@@ -43,10 +74,16 @@ export const postAdd = async (req, res) => {
       newComplaint.released_time,
       newComplaint.user_id,
     ];
+    const {rows} = await pool.query(query, values);
+    console.log("Successfully added.✅" );
 
-    await pool.query(query, values);
-    console.log("Successfully added.");
-    return res.redirect("/");
+
+    await Log(user_id ,
+    rows[0].complaint_id,
+    "P",
+    JSON.stringify(rows[0].released_time));
+
+    return res.end();
   } catch (err) {
     console.log(err);
     res.status(500).send("Error adding complaint");
@@ -55,25 +92,36 @@ export const postAdd = async (req, res) => {
 
 export const see = async (req, res) => {
   try {
-    // const {id} = req.params;
-    const id = 1;
+    const {id} = req.params;
+    const {user_id} = req.query;
+    // const id = 1;
     // id로 complain 정보 불러와야 하고
-    const query = `SELECT part, title, text, total_pros, total_cons, views FROM complaints WHERE complaint_id = ${id} `;
-    const result = await pool.query(query);
-    res.json(result.rows);
+    const query = `SELECT complaints.* , users.username, users.profile FROM complaints LEFT JOIN users ON complaints.user_id = users.user_id WHERE complaints.complaint_id = ${id} `;
+    const result_complaints = await pool.query(query);
+
+    const query_vote = `SELECT position FROM vote  WHERE vote.user_id = ${user_id} AND vote.complaint_id = ${id} `;
+    const result_votes = await pool.query(query_vote);
+
+    const vote_result = result_votes.rows.length > 0  ? result_votes.rows[0].position : "0";
+    
+    const voted = result_votes.rows.length > 0 ? "T" : "F";
+    res.json({
+      complaint: result_complaints.rows, 
+      vote: voted,
+      position: vote_result,
+    });
   } catch (err) {
     console.log(err);
-    return res.status(500).send("Error showing complaint");
+    return res.status(500).json(err);
   }
 };
 
 export const add_views = async (req, res) => {
   try {
-    // const {id} = req.params;
+    const {id} = req.params;
     // 현재 뷰 얻어오기.
-    const id = 1;
     const getCurrentQuerry = `SELECT views FROM complaints WHERE complaint_id = ${id}`;
-    const { rows } = await pool.query(getCurrentQuerry);
+    const { rows } = await pool.query(getCurrentQuerry); 
     const { views } = rows[0];
     // 새로운 뷰 DB에 변경.
     const newViews = views + 1;
@@ -87,15 +135,27 @@ export const add_views = async (req, res) => {
 };
 export const add_pros = async (req, res) => {
   try {
-    // const {id} = req.params;
-    const id = 1;
+    const {id} = req.params;
+    const {user_id} = req.query;
+
+    // const complaint_id = 1;
     const getCurrentQuerry = `SELECT total_pros FROM complaints WHERE complaint_id = ${id}`;
     const { rows } = await pool.query(getCurrentQuerry);
     const { total_pros } = rows[0];
     const new_pros = total_pros + 1;
     const query = `UPDATE complaints SET total_pros = ${new_pros} WHERE complaint_id = ${id}`;
     await pool.query(query);
-    res.json(new_pros);
+    await Log(parseInt(user_id) ,
+      parseInt(id),
+      "G",
+      JSON.stringify(rows[0].released_time));
+  
+
+    //vote
+    const query_vote = `INSERT INTO vote (complaint_id, user_id, position) VALUES($1, $2,$3)`;
+    const values_vote = [id, user_id , "G"];
+    await pool.query(query_vote, values_vote);
+    return res.json(new_pros);
   } catch (err) {
     console.log(err);
     return res.status(500).send("Error showing complaint");
@@ -103,14 +163,24 @@ export const add_pros = async (req, res) => {
 };
 export const add_cons = async (req, res) => {
   try {
-    // const {id} = req.params;
-    const id = 3;
+    const {id} = req.params;
+    const {user_id} = req.query;
     const getCurrentQuerry = `SELECT total_cons FROM complaints WHERE complaint_id = ${id}`;
     const { rows } = await pool.query(getCurrentQuerry);
     const { total_cons } = rows[0];
     const new_cons = total_cons + 1;
     const query = `UPDATE complaints SET total_cons = ${new_cons} WHERE complaint_id = ${id}`;
     await pool.query(query);
+    // log
+    await Log(parseInt(user_id) ,
+      parseInt(id),
+      "B",
+      JSON.stringify(rows[0].released_time));
+    return res.json(new_cons);
+  
+
+    //vote
+
     res.json(new_cons);
   } catch (err) {
     console.log(err);
@@ -118,18 +188,22 @@ export const add_cons = async (req, res) => {
   }
 };
 
-export const deleteComp = async (req, res) => {
   try {
-    // const {id} = req.params;
-    const id = 3;
+    const {id} = req.params;
+    const {user_id} = req.query;
     const query = `DELETE FROM complaints WHERE complaint_id = ${id}`;
     await pool.query(query);
     console.log("Delete completed");
-    res.redirect("/");
+    // log
+    await Log(user_id ,
+      id,
+      "D",
+      JSON.stringify(rows[0].released_time));
+      res.end();
   } catch (err) {
     res.status(500).json(err);
   }
-};
+
 export const watch_profile = async (req, res) => {
   try {
     // const user_id = req.session;
