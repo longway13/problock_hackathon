@@ -6,7 +6,7 @@ export const home = async (req, res) => {
 
     // const query = `SELECT part, title, text FROM complaints`;
     const query_popular = `SELECT complaints.*, users.username, users.profile FROM complaints LEFT JOIN users ON complaints.user_id = users.user_id ORDER BY views DESC LIMIT 2`;
-    const query_recent = `SELECT complaints.*, users.username, users.profile FROM complaints LEFT JOIN users ON complaints.user_id = users.user_id ORDER BY released_time DESC LIMIT 2`;
+    const query_recent = `SELECT complaints.*, users.username, users.profile FROM complaints LEFT JOIN users ON complaints.user_id = users.user_id ORDER BY released_time ASC LIMIT 2`;
 
     const result_popular = await pool.query(query_popular);
     console.log("Popular complaints uploaded ✅");
@@ -37,7 +37,7 @@ export const protect = async (req, res) => {
   try {
     const { size, page } = req.query;
     // const query = `SELECT part, title, text FROM complaints`;
-    const query = `SELECT complaints.*, users.username, users.profile FROM complaints LEFT JOIN users ON complaints.user_id = users.user_id ORDER BY released_time DESC LIMIT ${size} OFFSET ${(page - 1) * size}`;
+    const query = `SELECT complaints.*, users.username, users.profile FROM complaints LEFT JOIN users ON complaints.user_id = users.user_id ORDER BY released_time ASC LIMIT ${size} OFFSET ${(page - 1) * size}`;
     const { rows } = await pool.query(query);
     console.log("All complaints uploaded ✅");
     res.json(rows);

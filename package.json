@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@cosmostation/cosmosjs": "^0.11.2",
     "caver-js": "^1.9.0",
     "caver-js-ext-kas": "^1.12.0",
     "cors": "^2.8.5",
@@ -19,6 +20,7 @@
     "express": "^4.18.1",
     "morgan": "^1.10.0",
     "nodemon": "^3.0.1",
-    "pg": "^8.7.3"
+    "pg": "^8.7.3",
+    "web3": "^4.0.3"
   }
 }
