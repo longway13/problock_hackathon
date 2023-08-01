@@ -171,18 +171,23 @@ const keyring =
 keyringContainer.add(keyring);
 
 
-setInterval(async () => {
-  const block = await caver.rpc.klay.getBlockNumber();
-}, "50000");
+// setInterval(async () => {
+//   try {
+//     const block = await caver.rpc.klay.getBlockNumber();
+//   } catch (err) {
+//     console.error(err);
+//   }
+// }, "30000");
 
 const loggerContract = new caver.klay.Contract(
   loggerabi,
   process.env.contract_address
 );
+loggerContract.setWallet(keyringContainer);
 
 export async function Log(user_id, complaint_id, event_type, date) {
   try {
-    await loggerContract.setWallet(keyringContainer);
+
     await loggerContract.methods.log(user_id, complaint_id, event_type, date).send({
       from: keyring.address,
       gas: 1000000
